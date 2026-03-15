@@ -1,0 +1,35 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+
+# Build output
+build/
+dist/
+*.log
+build_log.txt
+
+# Local game data
+accounts.json
+unlocked_levels.json
+
+# Editor settings
+.vscode/settings.json
+
+# Installer/build tools
+Git/
+Git-*.exe
+Inno Setup 6/
+pyu-data/
+.pyupdater/
+
+# Local folders not part of repo
+david database/
+Davidcodewind/
+New folder/
+
+# Misc local files
+new recovery key norton.pdf
