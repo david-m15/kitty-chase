@@ -73,7 +73,7 @@ def save_accounts(accounts):
 
 # Game settings
 APP_NAME = "Kitty Chase"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
