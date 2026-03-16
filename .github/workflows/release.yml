@@ -74,7 +74,7 @@ jobs:
           files: dist/installer/KittyChase-macOS.dmg
 
   build-release-macos-intel:
-    runs-on: macos-13
+    runs-on: macos-12
     needs: build-release
     steps:
       - name: Checkout

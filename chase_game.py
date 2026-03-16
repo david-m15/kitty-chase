@@ -1618,7 +1618,7 @@ def game_loop():
                             move_y = 1 if dy > 0 else -1
                         red_pos[0] += move_x
                         red_pos[1] += move_y
-                # Separate red balls if they touch each other (only when player is moving)
+                # Separate red balls only when the player is moving
                 if player_moving:
                     for i in range(len(red_balls)):
                         for j in range(i + 1, len(red_balls)):
@@ -1628,7 +1628,7 @@ def game_loop():
                             dy = r2[1] - r1[1]
                             dist = (dx**2 + dy**2) ** 0.5
                             min_dist = 2 * RED_RADIUS
-                            if dist < min_dist and dist > 0:
+                            if dist < min_dist:
                                 # Find the opposite side of the yellow ball (player)
                                 def opposite_edge(player_pos):
                                     px, py = player_pos

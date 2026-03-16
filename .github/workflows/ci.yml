@@ -61,7 +61,7 @@ jobs:
           bash tools/build_macos.sh
 
   build-macos-intel:
-    runs-on: macos-13
+    runs-on: macos-12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
