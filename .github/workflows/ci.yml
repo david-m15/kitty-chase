@@ -59,3 +59,21 @@ jobs:
         shell: bash
         run: |
           bash tools/build_macos.sh
+
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build app + DMG (Intel)
+        shell: bash
+        env:
+          MAC_DMG_NAME: KittyChase-macOS-intel.dmg
+        run: |
+          bash tools/build_macos.sh

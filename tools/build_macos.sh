@@ -35,6 +35,8 @@ fi
 pyinstaller --windowed --name "KittyChase" "${ICON_ARGS[@]}" --add-data "tiger.png:." chase_game.py
 
 mkdir -p dist/installer
+DMG_NAME="${MAC_DMG_NAME:-KittyChase-macOS.dmg}"
+DMG_PATH="dist/installer/$DMG_NAME"
 APP_PATH="dist/KittyChase.app"
 if [ ! -d "$APP_PATH" ]; then
   APP_PATH="dist/KittyChase/KittyChase.app"
@@ -43,4 +45,4 @@ if [ ! -d "$APP_PATH" ]; then
   echo "Could not find KittyChase.app in dist/. Build may have failed."
   exit 1
 fi
-hdiutil create -volname "Kitty Chase" -srcfolder "$APP_PATH" -ov -format UDZO "dist/installer/KittyChase-macOS.dmg"
+hdiutil create -volname "Kitty Chase" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH"

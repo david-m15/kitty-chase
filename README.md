@@ -52,12 +52,17 @@ This must be run on macOS (or via GitHub Actions).
 ```
 pip install -r requirements.txt
 ```
-1. Build the app + DMG:
+1. Build the app + DMG (Apple Silicon default):
 ```
 bash tools/build_macos.sh
 ```
 
 The app will be created at `dist/KittyChase.app` and the installer at `dist/installer/KittyChase-macOS.dmg`.
+
+To build an Intel macOS installer, set the DMG name:
+```
+MAC_DMG_NAME=KittyChase-macOS-intel.dmg bash tools/build_macos.sh
+```
 
 ## Auto-Update (GitHub Releases)
 
@@ -69,7 +74,8 @@ APP_VERSION = "1.0.0"
 GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
 GITHUB_REPO = "YOUR_REPO_NAME"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
-MAC_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-intel.dmg"
 ```
 1. Keep `AppVersion` in `installer.iss` in sync with `APP_VERSION`.
 1. Build the installers (run on the matching OS):
@@ -86,6 +92,7 @@ bash tools/build_macos.sh
 ```
 dist\\installer\\KittyChase-Setup.exe
 dist/installer/KittyChase-macOS.dmg
+dist/installer/KittyChase-macOS-intel.dmg
 ```
 
 On next launch, the packaged app will prompt to download and run the newer installer.
@@ -103,7 +110,7 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-The workflow will create the release and upload `KittyChase-Setup.exe` and `KittyChase-macOS.dmg`.
+The workflow will create the release and upload `KittyChase-Setup.exe`, `KittyChase-macOS.dmg`, and `KittyChase-macOS-intel.dmg`.
 
 ## GitHub Actions CI Build
 

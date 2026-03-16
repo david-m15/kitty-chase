@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import urllib.request
+import platform
 from pathlib import Path
 
 import pygame
@@ -72,16 +73,20 @@ def save_accounts(accounts):
 
 # Game settings
 APP_NAME = "Kitty Chase"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.1.0"
 GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
-MAC_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-intel.dmg"
 
 
 def _installer_asset_name():
     if sys.platform == "darwin":
-        return MAC_INSTALLER_ASSET_NAME
+        machine = platform.machine().lower()
+        if machine in {"x86_64", "amd64"}:
+            return MAC_INTEL_INSTALLER_ASSET_NAME
+        return MAC_APPLE_SILICON_INSTALLER_ASSET_NAME
     if sys.platform.startswith("win"):
         return WINDOWS_INSTALLER_ASSET_NAME
     return ""
