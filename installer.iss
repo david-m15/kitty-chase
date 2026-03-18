@@ -1,5 +1,5 @@
 #define AppName "Kitty Chase"
-#define AppVersion "1.1.2"
+#define AppVersion "1.1.3"
 #define AppExeName "chase_game.exe"
 #define AppPublisher "Kitty Chase"
 
