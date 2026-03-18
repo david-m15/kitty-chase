@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pygame
 
+
 # --- Paths & storage helpers ---
 def _is_frozen():
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
@@ -47,20 +48,34 @@ def load_accounts():
         with open(ACCOUNTS_FILE, "r") as f:
             data = json.load(f)
         if isinstance(data, dict):
-            # Ensure Don is always available
-            if "don" not in data:
-                data["don"] = {"level": 1, "password": None}
-                save_accounts(data)
-            # Upgrade old format if needed
+            updated = False
+            normalized = {}
             for name, value in list(data.items()):
                 if isinstance(value, int):
-                    data[name] = {"level": value, "password": None}
-                    save_accounts(data)
-            return data
+                    entry = {"level": value, "password": None, "is_admin": False}
+                    updated = True
+                elif isinstance(value, dict):
+                    entry = value.copy()
+                    if "level" not in entry or not isinstance(entry.get("level"), int):
+                        entry["level"] = 1
+                        updated = True
+                    if "password" not in entry:
+                        entry["password"] = None
+                        updated = True
+                    if "is_admin" not in entry:
+                        entry["is_admin"] = False
+                        updated = True
+                else:
+                    entry = {"level": 1, "password": None, "is_admin": False}
+                    updated = True
+                normalized[name] = entry
+            if updated:
+                save_accounts(normalized)
+            return normalized
     except Exception:
         pass
     # Default
-    return {"don": {"level": 1, "password": None}}
+    return {}
 
 
 def save_accounts(accounts):
@@ -71,6 +86,238 @@ def save_accounts(accounts):
         pass
 
 
+def get_admin_name(accounts):
+    for name, entry in accounts.items():
+        if isinstance(entry, dict) and entry.get("is_admin"):
+            return name
+    return None
+
+
+def is_admin(accounts, name):
+    return accounts.get(name, {}).get("is_admin", False)
+
+
+def run_admin_setup():
+    step = "start"
+    admin_name = ""
+    admin_password = ""
+    error = ""
+    input_focused = False
+    while True:
+        fill_background()
+        if step == "start":
+            draw_text(
+                "No admin account found",
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 60,
+            )
+            button = pygame.Rect(WIDTH // 2 - 160, HEIGHT // 2 + 10, 320, 60)
+            draw_glassy_button(screen, button, (0, 150, 0), 20)
+            draw_text(
+                "Click to become admin",
+                small_font,
+                WHITE,
+                screen,
+                button.centerx,
+                button.centery,
+            )
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN and button.collidepoint(event.pos):
+                    step = "name"
+                    admin_name = ""
+                    admin_password = ""
+                    error = ""
+                    input_focused = False
+        elif step == "name":
+            input_box = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 20, 240, 60)
+            draw_text(
+                "Create Admin Account",
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 80,
+            )
+            draw_text(
+                "Enter admin name:",
+                small_font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 30,
+            )
+            if input_focused:
+                pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
+            else:
+                pygame.draw.rect(screen, WHITE, input_box, 2)
+            draw_text(
+                admin_name,
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 50,
+            )
+            next_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 110, 200, 45)
+            back_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 165, 200, 40)
+            pygame.draw.rect(screen, BLUE, next_button, border_radius=15)
+            pygame.draw.rect(screen, (120, 120, 120), back_button, border_radius=15)
+            draw_text("Next", small_font, WHITE, screen, next_button.centerx, next_button.centery)
+            draw_text("Back", small_font, WHITE, screen, back_button.centerx, back_button.centery)
+            if error:
+                draw_text(
+                    error,
+                    small_font,
+                    RED,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 210,
+                )
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if next_button.collidepoint(event.pos):
+                        candidate = admin_name.strip().lower()
+                        accounts = load_accounts()
+                        if not candidate:
+                            error = "Name cannot be empty!"
+                        elif candidate in {"guest"}:
+                            error = "Name is reserved!"
+                        elif candidate in accounts:
+                            error = "Name already exists!"
+                        else:
+                            admin_name = candidate
+                            error = ""
+                            step = "password"
+                            input_focused = False
+                    elif back_button.collidepoint(event.pos):
+                        step = "start"
+                        error = ""
+                        input_focused = False
+                    elif input_box.collidepoint(event.pos):
+                        input_focused = True
+                    else:
+                        input_focused = False
+                if input_focused and event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        candidate = admin_name.strip().lower()
+                        accounts = load_accounts()
+                        if not candidate:
+                            error = "Name cannot be empty!"
+                        elif candidate in {"guest"}:
+                            error = "Name is reserved!"
+                        elif candidate in accounts:
+                            error = "Name already exists!"
+                        else:
+                            admin_name = candidate
+                            error = ""
+                            step = "password"
+                            input_focused = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        admin_name = admin_name[:-1]
+                    else:
+                        if len(admin_name) < 12 and event.unicode.isprintable():
+                            admin_name += event.unicode
+        else:
+            input_box = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 20, 240, 60)
+            draw_text(
+                "Create Admin Account",
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 80,
+            )
+            draw_text(
+                "Set admin password:",
+                small_font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 30,
+            )
+            if input_focused:
+                pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
+            else:
+                pygame.draw.rect(screen, WHITE, input_box, 2)
+            draw_text(
+                admin_password,
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 50,
+            )
+            create_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 110, 200, 45)
+            back_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 165, 200, 40)
+            pygame.draw.rect(screen, BLUE, create_button, border_radius=15)
+            pygame.draw.rect(screen, (120, 120, 120), back_button, border_radius=15)
+            draw_text("Create Admin", small_font, WHITE, screen, create_button.centerx, create_button.centery)
+            draw_text("Back", small_font, WHITE, screen, back_button.centerx, back_button.centery)
+            if error:
+                draw_text(
+                    error,
+                    small_font,
+                    RED,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 210,
+                )
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if create_button.collidepoint(event.pos):
+                        if not admin_password:
+                            error = "Password cannot be empty!"
+                        else:
+                            accounts = load_accounts()
+                            accounts[admin_name] = {
+                                "level": 1,
+                                "password": admin_password,
+                                "is_admin": True,
+                            }
+                            save_accounts(accounts)
+                            return admin_name
+                    elif back_button.collidepoint(event.pos):
+                        step = "name"
+                        error = ""
+                        input_focused = False
+                    elif input_box.collidepoint(event.pos):
+                        input_focused = True
+                    else:
+                        input_focused = False
+                if input_focused and event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        if not admin_password:
+                            error = "Password cannot be empty!"
+                        else:
+                            accounts = load_accounts()
+                            accounts[admin_name] = {
+                                "level": 1,
+                                "password": admin_password,
+                                "is_admin": True,
+                            }
+                            save_accounts(accounts)
+                            return admin_name
+                    elif event.key == pygame.K_BACKSPACE:
+                        admin_password = admin_password[:-1]
+                    else:
+                        if len(admin_password) < 16 and event.unicode.isprintable():
+                            admin_password += event.unicode
+        pygame.display.flip()
+        clock.tick(30)
+
+
 # Game settings
 APP_NAME = "Kitty Chase"
 APP_VERSION = "1.1.3"
@@ -78,6 +325,7 @@ GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
 MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.tar.gz"
 
 
 def _installer_asset_name():
@@ -88,7 +336,10 @@ def _installer_asset_name():
         return MAC_APPLE_SILICON_INSTALLER_ASSET_NAME
     if sys.platform.startswith("win"):
         return WINDOWS_INSTALLER_ASSET_NAME
+    if sys.platform.startswith("linux"):
+        return LINUX_INSTALLER_ASSET_NAME
     return ""
+
 
 WIDTH, HEIGHT = 800, 600
 PLAYER_RADIUS = 20
@@ -103,8 +354,10 @@ BLUE = (0, 0, 255)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
+
 def _lerp(a, b, t):
     return int(a + (b - a) * t)
+
 
 def _vertical_gradient(surface, top_color, bottom_color):
     """Fill a surface with a simple vertical gradient."""
@@ -118,6 +371,7 @@ def _vertical_gradient(surface, top_color, bottom_color):
             _lerp(top_color[2], bottom_color[2], t),
         )
         pygame.draw.line(surface, color, (0, y), (width, y))
+
 
 def build_liquid_glass_background():
     """Pre-render a soft 'liquid glass' background in the Apple-style glassmorphism vibe."""
@@ -140,11 +394,14 @@ def build_liquid_glass_background():
 
     return bg.convert_alpha()
 
+
 def draw_glassy_button(screen, rect, base_color, border_radius=15):
     # Soft shadow for lift
     shadow_rect = rect.move(4, 6)
     shadow = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-    pygame.draw.rect(shadow, (0, 0, 0, 55), shadow.get_rect(), border_radius=border_radius)
+    pygame.draw.rect(
+        shadow, (0, 0, 0, 55), shadow.get_rect(), border_radius=border_radius
+    )
     screen.blit(shadow, shadow_rect.topleft)
 
     # Solid button body (no white highlight)
@@ -152,18 +409,28 @@ def draw_glassy_button(screen, rect, base_color, border_radius=15):
     pygame.draw.rect(btn, base_color, btn.get_rect(), border_radius=border_radius)
 
     # Subtle darker border for definition without whitening
-    border_color = (max(0, base_color[0] - 40), max(0, base_color[1] - 40), max(0, base_color[2] - 40))
-    pygame.draw.rect(btn, border_color, btn.get_rect(), width=2, border_radius=border_radius)
+    border_color = (
+        max(0, base_color[0] - 40),
+        max(0, base_color[1] - 40),
+        max(0, base_color[2] - 40),
+    )
+    pygame.draw.rect(
+        btn, border_color, btn.get_rect(), width=2, border_radius=border_radius
+    )
 
     screen.blit(btn, rect.topleft)
+
 
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 LIQUID_BG = build_liquid_glass_background()
 
+
 def fill_background():
     # Use the pre-rendered glass background everywhere instead of a flat fill
     screen.blit(LIQUID_BG, (0, 0))
+
+
 # Load tiger image (place 'tiger.png' and 'tiger.ico' in the same folder as this script)
 try:
     tiger_img = pygame.image.load(_resource_path("tiger.png"))
@@ -220,10 +487,11 @@ def _version_tuple(value):
 
 
 def _is_update_configured():
-    return (
-        GITHUB_OWNER not in {"REPLACE_ME", "", None}
-        and GITHUB_REPO not in {"REPLACE_ME", "", None}
-    )
+    return GITHUB_OWNER not in {"REPLACE_ME", "", None} and GITHUB_REPO not in {
+        "REPLACE_ME",
+        "",
+        None,
+    }
 
 
 def _fetch_latest_release():
@@ -260,9 +528,13 @@ def _show_update_prompt(latest_version):
             HEIGHT // 2 - 20,
         )
         draw_glassy_button(screen, yes_button, BLUE, 18)
-        draw_text("Update", small_font, WHITE, screen, yes_button.centerx, yes_button.centery)
+        draw_text(
+            "Update", small_font, WHITE, screen, yes_button.centerx, yes_button.centery
+        )
         draw_glassy_button(screen, no_button, (120, 120, 120), 18)
-        draw_text("Later", small_font, WHITE, screen, no_button.centerx, no_button.centery)
+        draw_text(
+            "Later", small_font, WHITE, screen, no_button.centerx, no_button.centery
+        )
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
@@ -304,8 +576,12 @@ def check_for_updates():
             return
         _show_update_status("Downloading update...")
         installer_path = Path(tempfile.gettempdir()) / installer_name
-        req = urllib.request.Request(asset_url, headers={"User-Agent": f"{APP_NAME} updater"})
-        with urllib.request.urlopen(req, timeout=30) as resp, open(installer_path, "wb") as f:
+        req = urllib.request.Request(
+            asset_url, headers={"User-Agent": f"{APP_NAME} updater"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp, open(
+            installer_path, "wb"
+        ) as f:
             shutil.copyfileobj(resp, f)
         _show_update_status("Launching installer...")
         pygame.quit()
@@ -342,17 +618,8 @@ def get_player_name():
     # Account selection screen
     player_name = None
     accounts = load_accounts()
-    account_buttons = []
-    for idx, acc_name in enumerate(accounts.keys()):
-        rect = pygame.Rect(WIDTH // 2 - 330 + idx * 120, HEIGHT // 2 - 30, 110, 50)
-        account_buttons.append((rect, acc_name))
-    david_button = pygame.Rect(WIDTH // 2 - 220, HEIGHT // 2 + 60, 100, 50)
-    other_button = pygame.Rect(WIDTH // 2 - 50, HEIGHT // 2 + 130, 100, 50)
+    admin_name = get_admin_name(accounts)
     guest_confirm = False
-    david_password_prompt = False
-    david_password = ""
-    david_error = ""
-    david_input_focused = False
     easy_hard_mode = None  # None, 'easy', or 'hard'
     selected_account = None
     mode_selection = False
@@ -361,7 +628,18 @@ def get_player_name():
     custom_error = ""
     custom_input_focused = False
     selected_custom = None
+    create_account_step = None  # None, 'name', or 'password'
+    create_account_name = ""
+    create_account_password = ""
+    create_account_error = ""
+    create_account_input_focused = False
+
+    if admin_name is None:
+        admin_name = run_admin_setup()
+        return admin_name, None
     while True:
+        accounts = load_accounts()
+        admin_name = get_admin_name(accounts)
         # Easy/Hard selection for non-David/Kate users
         if easy_hard_mode is not None:
             return player_name, easy_hard_mode
@@ -382,7 +660,9 @@ def get_player_name():
                 pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
             else:
                 pygame.draw.rect(screen, WHITE, input_box, 2)
-            draw_text(custom_password, font, BLACK, screen, WIDTH // 2, HEIGHT // 2 + 70)
+            draw_text(
+                custom_password, font, BLACK, screen, WIDTH // 2, HEIGHT // 2 + 70
+            )
             if custom_error:
                 draw_text(
                     custom_error, small_font, RED, screen, WIDTH // 2, HEIGHT // 2 + 120
@@ -419,7 +699,16 @@ def get_player_name():
                 if custom_input_focused and event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
                         if custom_password == accounts[selected_custom].get("password"):
-                            return selected_custom, None
+                            player_name = selected_custom
+                            custom_password_prompt = False
+                            custom_password = ""
+                            custom_error = ""
+                            custom_input_focused = False
+                            if selected_custom == admin_name or selected_custom == "kate":
+                                return selected_custom, None
+                            selected_account = selected_custom
+                            mode_selection = True
+                            break
                         else:
                             custom_error = "Incorrect password!"
                             custom_password = ""
@@ -428,6 +717,223 @@ def get_player_name():
                     else:
                         if len(custom_password) < 16 and event.unicode.isprintable():
                             custom_password += event.unicode
+            pygame.display.flip()
+            clock.tick(30)
+            continue
+        if create_account_step is not None:
+            fill_background()
+            if create_account_step == "name":
+                input_box = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 20, 240, 60)
+                draw_text(
+                    "Create Account",
+                    font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 - 80,
+                )
+                draw_text(
+                    "Enter a name:",
+                    small_font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 - 30,
+                )
+                if create_account_input_focused:
+                    pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
+                else:
+                    pygame.draw.rect(screen, WHITE, input_box, 2)
+                draw_text(
+                    create_account_name,
+                    font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 50,
+                )
+                next_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 110, 200, 45)
+                pygame.draw.rect(screen, BLUE, next_button, border_radius=15)
+                draw_text(
+                    "Next", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 132
+                )
+                if create_account_error:
+                    draw_text(
+                        create_account_error,
+                        small_font,
+                        RED,
+                        screen,
+                        WIDTH // 2,
+                        HEIGHT // 2 + 170,
+                    )
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if next_button.collidepoint(event.pos):
+                            candidate = create_account_name.strip().lower()
+                            if not candidate:
+                                create_account_error = "Name cannot be empty!"
+                            elif candidate in {"guest"}:
+                                create_account_error = "Name is reserved!"
+                            elif candidate in accounts:
+                                create_account_error = "Name already exists!"
+                            else:
+                                create_account_name = candidate
+                                create_account_error = ""
+                                create_account_step = "password"
+                                create_account_input_focused = False
+                                create_account_password = ""
+                        elif input_box.collidepoint(event.pos):
+                            create_account_input_focused = True
+                        else:
+                            create_account_input_focused = False
+                    if create_account_input_focused and event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:
+                            candidate = create_account_name.strip().lower()
+                            if not candidate:
+                                create_account_error = "Name cannot be empty!"
+                            elif candidate in {"guest"}:
+                                create_account_error = "Name is reserved!"
+                            elif candidate in accounts:
+                                create_account_error = "Name already exists!"
+                            else:
+                                create_account_name = candidate
+                                create_account_error = ""
+                                create_account_step = "password"
+                                create_account_input_focused = False
+                                create_account_password = ""
+                        elif event.key == pygame.K_BACKSPACE:
+                            create_account_name = create_account_name[:-1]
+                        else:
+                            if (
+                                len(create_account_name) < 12
+                                and event.unicode.isprintable()
+                            ):
+                                create_account_name += event.unicode
+            else:
+                input_box = pygame.Rect(WIDTH // 2 - 120, HEIGHT // 2 + 20, 240, 60)
+                draw_text(
+                    "Create Account",
+                    font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 - 80,
+                )
+                draw_text(
+                    "Set a password (optional):",
+                    small_font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 - 30,
+                )
+                if create_account_input_focused:
+                    pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
+                else:
+                    pygame.draw.rect(screen, WHITE, input_box, 2)
+                draw_text(
+                    create_account_password,
+                    font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 50,
+                )
+                finish_button = pygame.Rect(
+                    WIDTH // 2 - 100, HEIGHT // 2 + 110, 200, 45
+                )
+                pygame.draw.rect(screen, BLUE, finish_button, border_radius=15)
+                draw_text(
+                    "Create Account",
+                    small_font,
+                    WHITE,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 132,
+                )
+                skip_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 165, 200, 40)
+                pygame.draw.rect(screen, (120, 120, 120), skip_button, border_radius=15)
+                draw_text(
+                    "No Password",
+                    small_font,
+                    WHITE,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 + 185,
+                )
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        if finish_button.collidepoint(event.pos):
+                            password = (
+                                create_account_password
+                                if create_account_password
+                                else None
+                            )
+                            accounts[create_account_name] = {
+                                "level": 1,
+                                "password": password,
+                                "is_admin": False,
+                            }
+                            save_accounts(accounts)
+                            player_name = create_account_name
+                            selected_account = create_account_name
+                            mode_selection = True
+                            create_account_step = None
+                            create_account_password = ""
+                            create_account_input_focused = False
+                            break
+                        if skip_button.collidepoint(event.pos):
+                            accounts[create_account_name] = {
+                                "level": 1,
+                                "password": None,
+                                "is_admin": False,
+                            }
+                            save_accounts(accounts)
+                            player_name = create_account_name
+                            selected_account = create_account_name
+                            mode_selection = True
+                            create_account_step = None
+                            create_account_password = ""
+                            create_account_input_focused = False
+                            break
+                        elif input_box.collidepoint(event.pos):
+                            create_account_input_focused = True
+                        else:
+                            create_account_input_focused = False
+                    if create_account_input_focused and event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:
+                            password = (
+                                create_account_password
+                                if create_account_password
+                                else None
+                            )
+                            accounts[create_account_name] = {
+                                "level": 1,
+                                "password": password,
+                                "is_admin": False,
+                            }
+                            save_accounts(accounts)
+                            player_name = create_account_name
+                            selected_account = create_account_name
+                            mode_selection = True
+                            create_account_step = None
+                            create_account_password = ""
+                            create_account_input_focused = False
+                            break
+                        elif event.key == pygame.K_BACKSPACE:
+                            create_account_password = create_account_password[:-1]
+                        else:
+                            if (
+                                len(create_account_password) < 16
+                                and event.unicode.isprintable()
+                            ):
+                                create_account_password += event.unicode
             pygame.display.flip()
             clock.tick(30)
             continue
@@ -488,71 +994,6 @@ def get_player_name():
             pygame.display.flip()
             clock.tick(30)
             continue
-        if david_password_prompt:
-            # Password entry screen for David
-            input_box = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 60)
-            fill_background()
-            draw_text(
-                "Enter password for David:",
-                font,
-                BLACK,
-                screen,
-                WIDTH // 2,
-                HEIGHT // 2 - 60,
-            )
-            # Highlight input box if focused
-            if david_input_focused:
-                pygame.draw.rect(screen, (0, 200, 255), input_box, 4)
-            else:
-                pygame.draw.rect(screen, WHITE, input_box, 2)
-            draw_text(david_password, font, BLACK, screen, WIDTH // 2, HEIGHT // 2 + 70)
-            if david_error:
-                draw_text(
-                    david_error, small_font, RED, screen, WIDTH // 2, HEIGHT // 2 + 120
-                )
-            cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 40)
-            pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
-            draw_text(
-                "Cancel",
-                small_font,
-                WHITE,
-                screen,
-                cancel_button.centerx,
-                cancel_button.centery,
-            )
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if cancel_button.collidepoint(event.pos):
-                        david_password_prompt = False
-                        david_password = ""
-                        david_error = ""
-                        david_input_focused = False
-                        break
-                    elif input_box.collidepoint(event.pos):
-                        david_input_focused = True
-                    else:
-                        # Click outside input box or cancel closes dialog
-                        david_password_prompt = False
-                        david_input_focused = False
-                        break
-                if david_input_focused and event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        if david_password == "1538354159":
-                            return "david"
-                        else:
-                            david_error = "Incorrect password!"
-                            david_password = ""
-                    elif event.key == pygame.K_BACKSPACE:
-                        david_password = david_password[:-1]
-                    else:
-                        if len(david_password) < 16 and event.unicode.isprintable():
-                            david_password += event.unicode
-            pygame.display.flip()
-            clock.tick(30)
-            continue
         if not guest_confirm:
             fill_background()
             draw_text(
@@ -563,35 +1004,48 @@ def get_player_name():
                 WIDTH // 2,
                 HEIGHT // 2 - 100,
             )
+            account_buttons = []
+            for idx, acc_name in enumerate(accounts.keys()):
+                rect = pygame.Rect(
+                    WIDTH // 2 - 330 + idx * 120, HEIGHT // 2 - 30, 110, 50
+                )
+                account_buttons.append((rect, acc_name))
             # Draw account buttons
             for rect, acc_name in account_buttons:
                 draw_glassy_button(screen, rect, (100, 100, 255), 15)
                 # display names with capitalization for readability
                 draw_text(
-                    acc_name.title(), small_font, WHITE, screen, rect.centerx, rect.centery
+                    acc_name.title(),
+                    small_font,
+                    WHITE,
+                    screen,
+                    rect.centerx,
+                    rect.centery,
                 )
-            # Draw David button
-            draw_glassy_button(screen, david_button, RED, 15)
+            add_account_button = pygame.Rect(
+                WIDTH // 2 - 220, HEIGHT // 2 + 60, 180, 50
+            )
+            guest_button = pygame.Rect(WIDTH // 2 + 20, HEIGHT // 2 + 60, 140, 50)
+            draw_glassy_button(screen, add_account_button, (0, 150, 0), 15)
             draw_text(
-                "David",
+                "Add Account",
                 small_font,
                 WHITE,
                 screen,
-                david_button.centerx,
-                david_button.centery,
+                add_account_button.centerx,
+                add_account_button.centery,
             )
-            # Draw Other button
-            draw_glassy_button(screen, other_button, BLACK, 15)
+            draw_glassy_button(screen, guest_button, BLACK, 15)
             draw_text(
-                "Other",
+                "Guest",
                 small_font,
                 WHITE,
                 screen,
-                other_button.centerx,
-                other_button.centery,
+                guest_button.centerx,
+                guest_button.centery,
             )
             draw_text(
-                "Or select Other to play as guest",
+                "Add Account to create a user or choose Guest",
                 small_font,
                 BLACK,
                 screen,
@@ -615,19 +1069,21 @@ def get_player_name():
                                 break
                             else:
                                 player_name = acc_name
-                                # If not David/guest, go to mode selection
-                                if player_name not in ["david", "guest"]:
-                                    selected_account = acc_name
-                                    mode_selection = True
-                                    break
-                                return player_name, None
-                    if david_button.collidepoint(event.pos):
-                        david_password_prompt = True
-                        david_password = ""
-                        david_error = ""
-                        david_input_focused = False
+                                if player_name == "guest":
+                                    return player_name, None
+                                if acc_name == admin_name or acc_name == "kate":
+                                    return player_name, None
+                                selected_account = acc_name
+                                mode_selection = True
+                                break
+                    if add_account_button.collidepoint(event.pos):
+                        create_account_step = "name"
+                        create_account_name = ""
+                        create_account_password = ""
+                        create_account_error = ""
+                        create_account_input_focused = False
                         break
-                    elif other_button.collidepoint(event.pos):
+                    elif guest_button.collidepoint(event.pos):
                         guest_confirm = True
                         break
             pygame.display.flip()
@@ -765,7 +1221,14 @@ def choose_level_screen(unlocked_levels, versus_mode=False, page=0, player_name=
         # Settings button
         settings_button = pygame.Rect(10, 10, 100, 40)
         pygame.draw.rect(screen, (100, 100, 100), settings_button, border_radius=15)
-        draw_text("Settings", small_font, WHITE, screen, settings_button.centerx, settings_button.centery)
+        draw_text(
+            "Settings",
+            small_font,
+            WHITE,
+            screen,
+            settings_button.centerx,
+            settings_button.centery,
+        )
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -778,13 +1241,19 @@ def choose_level_screen(unlocked_levels, versus_mode=False, page=0, player_name=
                     if rect.collidepoint(event.pos) and unlocked:
                         return level_num, False, None
                 if prev_rect.collidepoint(event.pos) and page > 0:
-                    return choose_level_screen(unlocked_levels, False, page - 1, player_name)
+                    return choose_level_screen(
+                        unlocked_levels, False, page - 1, player_name
+                    )
                 if next_rect.collidepoint(event.pos):
-                    return choose_level_screen(unlocked_levels, False, page + 1, player_name)
+                    return choose_level_screen(
+                        unlocked_levels, False, page + 1, player_name
+                    )
                 if goto_rect.collidepoint(event.pos):
                     farthest = unlocked_levels
                     new_page = (farthest - 1) // levels_per_page
-                    return choose_level_screen(unlocked_levels, False, new_page, player_name)
+                    return choose_level_screen(
+                        unlocked_levels, False, new_page, player_name
+                    )
                 if settings_button.collidepoint(event.pos):
                     result = show_settings_screen(player_name)
                     if result == "delete":
@@ -818,6 +1287,7 @@ def show_settings_screen(player_name):
         if level_int < 1:
             return None, "Level must be 1 or higher!"
         return level_int, ""
+
     while True:
         fill_background()
         if set_password_prompt:
@@ -1027,10 +1497,7 @@ def show_settings_screen(player_name):
                     elif event.key == pygame.K_BACKSPACE:
                         set_level_value = set_level_value[:-1]
                     else:
-                        if (
-                            len(set_level_value) < 6
-                            and event.unicode.isdigit()
-                        ):
+                        if len(set_level_value) < 6 and event.unicode.isdigit():
                             set_level_value += event.unicode
             pygame.display.flip()
             clock.tick(30)
@@ -1048,9 +1515,18 @@ def show_settings_screen(player_name):
             remove_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
             cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             pygame.draw.rect(screen, RED, remove_button, border_radius=15)
-            draw_text("Remove Password", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
+            draw_text(
+                "Remove Password",
+                small_font,
+                WHITE,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 65,
+            )
             pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
-            draw_text("Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145)
+            draw_text(
+                "Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145
+            )
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -1068,12 +1544,21 @@ def show_settings_screen(player_name):
             clock.tick(30)
             continue
         if accounts_list:
-            # Accounts list screen for David
+            # Accounts list screen for Admin
             accounts = load_accounts()
+            admin_name = get_admin_name(accounts)
+            admin_mode = is_admin(accounts, player_name)
             accounts_to_show = list(accounts.keys())
             if selected_account:
                 # Show options for selected account
-                draw_text(f"Options for {selected_account.title()}", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 100)
+                draw_text(
+                    f"Options for {selected_account.title()}",
+                    font,
+                    BLACK,
+                    screen,
+                    WIDTH // 2,
+                    HEIGHT // 2 - 100,
+                )
                 entry = accounts.get(selected_account, {})
                 if isinstance(entry, dict):
                     has_password = entry.get("password") is not None
@@ -1094,20 +1579,36 @@ def show_settings_screen(player_name):
                 if has_password:
                     remove_button = pygame.Rect(WIDTH // 2 - 100, option_y, 200, 50)
                     draw_glassy_button(screen, remove_button, (255, 165, 0), 15)
-                    draw_text("Remove Password", small_font, WHITE, screen, WIDTH // 2, option_y + 25)
+                    draw_text(
+                        "Remove Password",
+                        small_font,
+                        WHITE,
+                        screen,
+                        WIDTH // 2,
+                        option_y + 25,
+                    )
                     option_y += 60
                 set_level_button = pygame.Rect(WIDTH // 2 - 100, option_y, 200, 50)
                 draw_glassy_button(screen, set_level_button, (0, 120, 200), 15)
-                draw_text("Set Level", small_font, WHITE, screen, WIDTH // 2, option_y + 25)
+                draw_text(
+                    "Set Level", small_font, WHITE, screen, WIDTH // 2, option_y + 25
+                )
                 option_y += 60
                 delete_button = pygame.Rect(WIDTH // 2 - 100, option_y, 200, 50)
                 draw_glassy_button(screen, delete_button, RED, 15)
-                draw_text("Delete Account", small_font, WHITE, screen, WIDTH // 2, option_y + 25)
+                draw_text(
+                    "Delete Account",
+                    small_font,
+                    WHITE,
+                    screen,
+                    WIDTH // 2,
+                    option_y + 25,
+                )
                 option_y += 60
                 back_button = pygame.Rect(WIDTH // 2 - 100, option_y, 200, 50)
                 draw_glassy_button(screen, back_button, (120, 120, 120), 15)
                 draw_text("Back", small_font, WHITE, screen, WIDTH // 2, option_y + 25)
-                if player_name == "david" and has_password:
+                if admin_mode and has_password:
                     draw_text(
                         f"Password: {accounts[selected_account]['password']}",
                         small_font,
@@ -1135,19 +1636,30 @@ def show_settings_screen(player_name):
                             selected_account = None
             else:
                 # Show list of accounts
-                draw_text("Accounts", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 150)
+                draw_text(
+                    "Accounts", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 150
+                )
                 account_buttons = []
                 y_pos = HEIGHT // 2 - 100
                 for acc_name in accounts_to_show:
-                    if acc_name != "david":  # Don't show David's own account
+                    if acc_name != admin_name:  # Don't show admin account
                         rect = pygame.Rect(WIDTH // 2 - 100, y_pos, 200, 40)
                         account_buttons.append((rect, acc_name))
                         draw_glassy_button(screen, rect, BLUE, 15)
-                        draw_text(acc_name.title(), small_font, WHITE, screen, rect.centerx, rect.centery)
+                        draw_text(
+                            acc_name.title(),
+                            small_font,
+                            WHITE,
+                            screen,
+                            rect.centerx,
+                            rect.centery,
+                        )
                         y_pos += 50
                 back_button = pygame.Rect(WIDTH // 2 - 100, y_pos + 20, 200, 50)
                 draw_glassy_button(screen, back_button, (120, 120, 120), 15)
-                draw_text("Back", small_font, WHITE, screen, WIDTH // 2, back_button.centery)
+                draw_text(
+                    "Back", small_font, WHITE, screen, WIDTH // 2, back_button.centery
+                )
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.quit()
@@ -1175,9 +1687,18 @@ def show_settings_screen(player_name):
             delete_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
             cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             pygame.draw.rect(screen, RED, delete_button, border_radius=15)
-            draw_text("Delete Account", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
+            draw_text(
+                "Delete Account",
+                small_font,
+                WHITE,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 65,
+            )
             pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
-            draw_text("Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145)
+            draw_text(
+                "Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145
+            )
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -1221,9 +1742,18 @@ def show_settings_screen(player_name):
             remove_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
             cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             pygame.draw.rect(screen, BLUE, remove_button, border_radius=15)
-            draw_text("Remove Password", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
+            draw_text(
+                "Remove Password",
+                small_font,
+                WHITE,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 65,
+            )
             pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
-            draw_text("Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145)
+            draw_text(
+                "Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145
+            )
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -1246,21 +1776,28 @@ def show_settings_screen(player_name):
         delete_button = None
         accounts_button = None
         password_y = HEIGHT // 2 + 50
-        if player_name == "david":
+        accounts = load_accounts()
+        admin_mode = is_admin(accounts, player_name)
+        if admin_mode:
             accounts_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 50)
             pygame.draw.rect(screen, (0, 150, 0), accounts_button, border_radius=15)
-            draw_text("Accounts", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 5)
+            draw_text(
+                "Accounts", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 5
+            )
             password_y = HEIGHT // 2 + 80
-        elif player_name not in ["david", "kate", "guest"]:
+        elif player_name not in ["kate", "guest"]:
             delete_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 50)
             pygame.draw.rect(screen, RED, delete_button, border_radius=15)
-            draw_text("Delete Account", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 5)
-        accounts = load_accounts()
+            draw_text(
+                "Delete Account", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 5
+            )
         has_password = accounts.get(player_name, {}).get("password") is not None
         password_button_text = "Remove Password" if has_password else "Set Password"
         set_password_button = pygame.Rect(WIDTH // 2 - 100, password_y, 200, 50)
         pygame.draw.rect(screen, BLUE, set_password_button, border_radius=15)
-        draw_text(password_button_text, small_font, WHITE, screen, WIDTH // 2, password_y + 25)
+        draw_text(
+            password_button_text, small_font, WHITE, screen, WIDTH // 2, password_y + 25
+        )
         back_y = password_y + 70
         back_button = pygame.Rect(WIDTH // 2 - 100, back_y, 200, 50)
         pygame.draw.rect(screen, (120, 120, 120), back_button, border_radius=15)
@@ -1303,16 +1840,32 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
             draw_text(
                 "Are you sure?", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 40
             )
-            confirm_delete_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
+            confirm_delete_button = pygame.Rect(
+                WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50
+            )
             cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             pygame.draw.rect(screen, RED, confirm_delete_button, border_radius=15)
-            draw_text("DELETE ACCOUNT", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
+            draw_text(
+                "DELETE ACCOUNT",
+                small_font,
+                WHITE,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 65,
+            )
             pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
-            draw_text("Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145)
+            draw_text(
+                "Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145
+            )
         else:
             # Normal screen
             draw_text(
-                "Press Start to play!", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 40
+                "Press Start to play!",
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 40,
             )
             pygame.draw.rect(screen, BLUE, button_rect, border_radius=15)
             draw_text("START", font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
@@ -1320,7 +1873,14 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
             draw_text("BACK", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 205)
             settings_button = pygame.Rect(10, 10, 100, 40)
             pygame.draw.rect(screen, (100, 100, 100), settings_button, border_radius=15)
-            draw_text("Settings", small_font, WHITE, screen, settings_button.centerx, settings_button.centery)
+            draw_text(
+                "Settings",
+                small_font,
+                WHITE,
+                screen,
+                settings_button.centerx,
+                settings_button.centery,
+            )
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -1328,8 +1888,12 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if confirm_delete:
                     # Handle confirmation screen
-                    confirm_delete_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
-                    cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
+                    confirm_delete_button = pygame.Rect(
+                        WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50
+                    )
+                    cancel_button = pygame.Rect(
+                        WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50
+                    )
                     if confirm_delete_button.collidepoint(event.pos):
                         # Delete account
                         accounts = load_accounts()
@@ -1343,7 +1907,9 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
                     # Handle normal screen
                     if button_rect.collidepoint(event.pos):
                         # Go to level select
-                        level, _, action = choose_level_screen(unlocked_levels, player_name=player_name)
+                        level, _, action = choose_level_screen(
+                            unlocked_levels, player_name=player_name
+                        )
                         if action == "delete_account":
                             return None, None, "delete_account"
                         return level, False, None
@@ -1360,24 +1926,24 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
 # Infinite level unlock: store highest unlocked level (int)
 
 
-# --- Per-account level progress for David and Kate ---
-def load_highest_unlocked_level(player_name=None):
+# --- Per-account level progress for Admin and Kate ---
+def load_highest_unlocked_level(player_name=None, admin_mode=False):
     try:
         with open(UNLOCKED_LEVELS_FILE, "r") as f:
             data = json.load(f)
         if isinstance(data, dict):
-            if player_name in ["david", "kate"]:
+            if admin_mode or player_name == "kate":
                 return data.get(player_name, 1)
         elif isinstance(data, int):
             # Legacy support: if file is just an int, treat as David's progress
-            if player_name == "david":
+            if admin_mode:
                 return data
     except Exception:
         pass
     return 1
 
 
-def save_highest_unlocked_level(level, player_name=None):
+def save_highest_unlocked_level(level, player_name=None, admin_mode=False):
     try:
         # Load existing data
         data = {}
@@ -1389,7 +1955,7 @@ def save_highest_unlocked_level(level, player_name=None):
                     data = {}
         if not isinstance(data, dict):
             data = {}
-        if player_name in ["david", "kate"]:
+        if admin_mode or player_name == "kate":
             data[player_name] = level
             with open(UNLOCKED_LEVELS_FILE, "w") as f:
                 json.dump(data, f)
@@ -1411,25 +1977,31 @@ def game_loop():
             else:
                 player_name = result
                 user_mode = None
-            # If David or Kate, set authenticated_user so we don't ask again
-            if player_name in ["david", "kate"]:
-                authenticated_user = player_name
         else:
             player_name = authenticated_user
-            # For David/Kate, user_mode is always None
+            # For Admin/Kate, user_mode is always None
             user_mode = None
 
         accounts = load_accounts()
-        if player_name not in ["david", "kate", "guest"]:
+        admin_mode = is_admin(accounts, player_name)
+        admin_name = get_admin_name(accounts)
+        # If Admin or Kate, set authenticated_user so we don't ask again
+        if authenticated_user is None and (admin_mode or player_name == "kate"):
+            authenticated_user = player_name
+        if not admin_mode and player_name not in ["kate", "guest"]:
             highest_unlocked = accounts.get(player_name, {}).get("level", 1)
         elif player_name == "guest":
             highest_unlocked = 1
         else:
-            highest_unlocked = load_highest_unlocked_level(player_name)
+            highest_unlocked = load_highest_unlocked_level(
+                player_name, admin_mode=admin_mode
+            )
 
         # --- Always go to level select after each round ---
         while True:
-            level_result = wait_for_start_and_choose_level(highest_unlocked, player_name)
+            level_result = wait_for_start_and_choose_level(
+                highest_unlocked, player_name
+            )
             if level_result[2] == "signout":
                 authenticated_user = None  # Reset authentication
                 break  # Break to outer loop to show account selection again
@@ -1447,7 +2019,7 @@ def game_loop():
             win = False
             lose = False
             collected = 0
-            if player_name == "david":
+            if admin_mode:
                 num_red = 2
                 base_blue = 10
                 red_speed = 4
@@ -1456,7 +2028,7 @@ def game_loop():
                 base_blue = 5
                 red_speed = 1
             else:
-                # Easy/Hard mode for non-David/Kate
+                # Easy/Hard mode for non-admin/Kate
                 if user_mode == "easy":
                     num_red = 1
                     base_blue = 5
@@ -1562,7 +2134,12 @@ def game_loop():
                         pygame.quit()
                         sys.exit()
                 keys = pygame.key.get_pressed()
-                player_moving = keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_UP] or keys[pygame.K_DOWN]
+                player_moving = (
+                    keys[pygame.K_LEFT]
+                    or keys[pygame.K_RIGHT]
+                    or keys[pygame.K_UP]
+                    or keys[pygame.K_DOWN]
+                )
                 if keys[pygame.K_LEFT]:
                     player_pos[0] -= player_speed
                 if keys[pygame.K_RIGHT]:
@@ -1641,15 +2218,23 @@ def game_loop():
                                     farthest = max(dists, key=lambda x: x[0])[1]
                                     if farthest == "left":
                                         x = RED_RADIUS
-                                        y = random.randint(RED_RADIUS, HEIGHT - RED_RADIUS)
+                                        y = random.randint(
+                                            RED_RADIUS, HEIGHT - RED_RADIUS
+                                        )
                                     elif farthest == "right":
                                         x = WIDTH - RED_RADIUS
-                                        y = random.randint(RED_RADIUS, HEIGHT - RED_RADIUS)
+                                        y = random.randint(
+                                            RED_RADIUS, HEIGHT - RED_RADIUS
+                                        )
                                     elif farthest == "top":
-                                        x = random.randint(RED_RADIUS, WIDTH - RED_RADIUS)
+                                        x = random.randint(
+                                            RED_RADIUS, WIDTH - RED_RADIUS
+                                        )
                                         y = RED_RADIUS
                                     else:  # bottom
-                                        x = random.randint(RED_RADIUS, WIDTH - RED_RADIUS)
+                                        x = random.randint(
+                                            RED_RADIUS, WIDTH - RED_RADIUS
+                                        )
                                         y = HEIGHT - RED_RADIUS
                                     return [x, y]
 
@@ -1785,7 +2370,9 @@ def game_loop():
             restart_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 60)
             save_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             show_save = (
-                player_name not in ["david", "kate"] and player_name not in accounts
+                not admin_mode
+                and player_name != "kate"
+                and player_name not in accounts
             )
             temp_other = player_name == "guest"
             save_prompt = False
@@ -1897,13 +2484,21 @@ def game_loop():
                                 if event.key == pygame.K_RETURN:
                                     if save_name:
                                         accounts = load_accounts()
+                                        reserved_names = {"guest"}
+                                        if admin_name:
+                                            reserved_names.add(admin_name)
                                         if (
-                                            save_name in ["david", "kate"]
+                                            save_name in reserved_names
                                             or save_name in accounts
                                         ):
                                             save_message = "Name taken!"
                                         else:
-                                            accounts[save_name] = {"level": max(level if level is not None else 1, 1), "password": None}
+                                            accounts[save_name] = {
+                                                "level": max(
+                                                    level if level is not None else 1, 1
+                                                ),
+                                                "password": None,
+                                            }
                                             save_accounts(accounts)
                                             save_message = "Saved!"
                                             pygame.display.flip()
@@ -1953,7 +2548,9 @@ def game_loop():
                     "START OVER", font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 100
                 )
                 if show_save and not save_prompt:
-                    pygame.draw.rect(screen, (0, 150, 255), save_button, border_radius=15)
+                    pygame.draw.rect(
+                        screen, (0, 150, 255), save_button, border_radius=15
+                    )
                     draw_text(
                         "Save My Progress",
                         small_font,
@@ -1963,8 +2560,17 @@ def game_loop():
                         save_button.centery,
                     )
                 settings_button = pygame.Rect(10, 10, 100, 40)
-                pygame.draw.rect(screen, (100, 100, 100), settings_button, border_radius=10)
-                draw_text("Settings", small_font, WHITE, screen, settings_button.centerx, settings_button.centery)
+                pygame.draw.rect(
+                    screen, (100, 100, 100), settings_button, border_radius=10
+                )
+                draw_text(
+                    "Settings",
+                    small_font,
+                    WHITE,
+                    screen,
+                    settings_button.centerx,
+                    settings_button.centery,
+                )
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.quit()
@@ -1992,10 +2598,12 @@ def game_loop():
                 break
             # Unlock next level if win and not already unlocked
             if win:
-                if player_name in ["david", "kate"]:
+                if admin_mode or player_name == "kate":
                     if level is not None and level >= highest_unlocked:
                         highest_unlocked = level + 1
-                        save_highest_unlocked_level(highest_unlocked, player_name)
+                        save_highest_unlocked_level(
+                            highest_unlocked, player_name, admin_mode=admin_mode
+                        )
                 elif player_name != "guest":
                     accounts = load_accounts()
                     # Always unlock next level for this user

@@ -59,6 +59,21 @@ bash tools/build_macos.sh
 
 The app will be created at `dist/KittyChase.app` and the installer at `dist/installer/KittyChase-macOS.dmg`.
 
+## Build Linux App + Tarball (Linux)
+
+This must be run on Linux (e.g., Ubuntu/Debian, which is supported on Chrome OS via Crostini).
+
+1. Install build dependencies:
+```
+pip install -r requirements.txt
+```
+1. Build the app + tarball:
+```
+bash tools/build_linux.sh
+```
+
+The app will be created at `dist/KittyChase` and the installer at `dist/installer/KittyChase-linux.tar.gz`.
+
 ## Auto-Update (GitHub Releases)
 
 The app checks GitHub Releases and can download/run the latest installer.
@@ -70,6 +85,7 @@ GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
 GITHUB_REPO = "YOUR_REPO_NAME"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
 MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
+LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.tar.gz"
 ```
 1. Keep `AppVersion` in `installer.iss` in sync with `APP_VERSION`.
 1. Build the installers (run on the matching OS):
@@ -80,12 +96,16 @@ iscc installer.iss
 
 # macOS
 bash tools/build_macos.sh
+
+# Linux
+bash tools/build_linux.sh
 ```
 1. Create a GitHub Release with tag `v1.0.0` (matching `APP_VERSION`).
 1. Upload the installers to that release:
 ```
 dist\\installer\\KittyChase-Setup.exe
 dist/installer/KittyChase-macOS.dmg
+dist/installer/KittyChase-linux.tar.gz
 ```
 
 On next launch, the packaged app will prompt to download and run the newer installer.
@@ -103,7 +123,7 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-The workflow will create the release and upload `KittyChase-Setup.exe` and `KittyChase-macOS.dmg`.
+The workflow will create the release and upload `KittyChase-Setup.exe`, `KittyChase-macOS.dmg`, and `KittyChase-linux.tar.gz`.
 
 ## GitHub Actions CI Build
 
@@ -128,3 +148,4 @@ git push origin v1.0.2
 - installer.iss: Inno Setup installer script
 - requirements.txt: Dependencies
 - tools/build_macos.sh: macOS build + DMG packaging script
+- tools/build_linux.sh: Linux build + tarball packaging script
