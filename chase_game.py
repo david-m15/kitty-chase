@@ -5,6 +5,7 @@ import random
 import math
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import urllib.request
@@ -12,6 +13,7 @@ import platform
 from pathlib import Path
 
 import pygame
+from engine import GameState, InputFrame, migrate_accounts_payload, step as engine_step
 
 
 # --- Paths & storage helpers ---
@@ -24,14 +26,23 @@ def _resource_path(relative_path):
     return base / relative_path
 
 
-def _data_dir():
-    if _is_frozen():
+def _platform_data_root():
+    if sys.platform.startswith("win"):
         base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
         if base:
-            root = Path(base)
-        else:
-            root = Path.home() / "AppData" / "Local"
-        data_path = root / "KittyChase"
+            return Path(base)
+        return Path.home() / "AppData" / "Local"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support"
+    base = os.getenv("XDG_DATA_HOME")
+    if base:
+        return Path(base)
+    return Path.home() / ".local" / "share"
+
+
+def _data_dir():
+    if _is_frozen():
+        data_path = _platform_data_root() / "KittyChase"
     else:
         data_path = Path(__file__).resolve().parent
     data_path.mkdir(parents=True, exist_ok=True)
@@ -48,28 +59,8 @@ def load_accounts():
         with open(ACCOUNTS_FILE, "r") as f:
             data = json.load(f)
         if isinstance(data, dict):
-            updated = False
-            normalized = {}
-            for name, value in list(data.items()):
-                if isinstance(value, int):
-                    entry = {"level": value, "password": None, "is_admin": False}
-                    updated = True
-                elif isinstance(value, dict):
-                    entry = value.copy()
-                    if "level" not in entry or not isinstance(entry.get("level"), int):
-                        entry["level"] = 1
-                        updated = True
-                    if "password" not in entry:
-                        entry["password"] = None
-                        updated = True
-                    if "is_admin" not in entry:
-                        entry["is_admin"] = False
-                        updated = True
-                else:
-                    entry = {"level": 1, "password": None, "is_admin": False}
-                    updated = True
-                normalized[name] = entry
-            if updated:
+            normalized = migrate_accounts_payload(data)
+            if normalized != data:
                 save_accounts(normalized)
             return normalized
     except Exception:
@@ -320,19 +311,20 @@ def run_admin_setup():
 
 # Game settings
 APP_NAME = "Kitty Chase"
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.2.1"
 GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
 MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
-LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.tar.gz"
+MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-intel.dmg"
+LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.AppImage"
 
 
 def _installer_asset_name():
     if sys.platform == "darwin":
         machine = platform.machine().lower()
         if machine in {"x86_64", "amd64"}:
-            return ""
+            return MAC_INTEL_INSTALLER_ASSET_NAME
         return MAC_APPLE_SILICON_INSTALLER_ASSET_NAME
     if sys.platform.startswith("win"):
         return WINDOWS_INSTALLER_ASSET_NAME
@@ -549,13 +541,33 @@ def _show_update_prompt(latest_version):
 
 def _show_update_status(message):
     fill_background()
-    draw_text(message, font, BLACK, screen, WIDTH // 2, HEIGHT // 2)
+    text = "" if message is None else str(message)
+    lines = text.splitlines() or [""]
+    if len(lines) == 1:
+        draw_text(lines[0], font, BLACK, screen, WIDTH // 2, HEIGHT // 2)
+        pygame.display.flip()
+        return
+
+    line_font = small_font
+    line_height = line_font.get_linesize()
+    total_height = line_height * len(lines)
+    start_y = HEIGHT // 2 - (total_height // 2) + (line_height // 2)
+    for i, line in enumerate(lines):
+        draw_text(line, line_font, BLACK, screen, WIDTH // 2, start_y + i * line_height)
     pygame.display.flip()
 
 
 def _launch_installer(installer_path):
     if sys.platform == "darwin":
         subprocess.Popen(["open", str(installer_path)])
+        return
+    if sys.platform.startswith("linux"):
+        try:
+            mode = installer_path.stat().st_mode
+            installer_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        except Exception:
+            pass
+        subprocess.Popen([str(installer_path), "--appimage-extract-and-run"])
         return
     subprocess.Popen([str(installer_path)])
 
@@ -583,7 +595,7 @@ def check_for_updates():
             installer_path, "wb"
         ) as f:
             shutil.copyfileobj(resp, f)
-        _show_update_status("Launching installer...")
+        _show_update_status("Launching update...")
         pygame.quit()
         _launch_installer(installer_path)
         sys.exit()
@@ -640,7 +652,7 @@ def get_player_name():
     while True:
         accounts = load_accounts()
         admin_name = get_admin_name(accounts)
-        # Easy/Hard selection for non-David/Kate users
+        # Easy/Hard selection for non-admin/Kate users
         if easy_hard_mode is not None:
             return player_name, easy_hard_mode
         if custom_password_prompt:
@@ -1258,6 +1270,8 @@ def choose_level_screen(unlocked_levels, versus_mode=False, page=0, player_name=
                     result = show_settings_screen(player_name)
                     if result == "delete":
                         return None, None, "delete_account"
+                    if result == "signout":
+                        return None, None, "signout"
         pygame.display.flip()
         clock.tick(30)
 
@@ -1268,6 +1282,7 @@ def show_settings_screen(player_name):
     set_error = ""
     set_input_focused = False
     confirm_remove_password = False
+    confirm_reset_accounts = False
     accounts_list = False
     confirm_delete_account = None
     confirm_remove_password_account = None
@@ -1543,6 +1558,51 @@ def show_settings_screen(player_name):
             pygame.display.flip()
             clock.tick(30)
             continue
+        if confirm_reset_accounts:
+            # Confirmation screen for resetting all accounts/progress
+            draw_text(
+                "Reset all accounts and progress?",
+                font,
+                BLACK,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 60,
+            )
+            draw_text(
+                "This clears saves on this computer.",
+                small_font,
+                RED,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 - 15,
+            )
+            reset_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50)
+            cancel_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
+            pygame.draw.rect(screen, RED, reset_button, border_radius=15)
+            draw_text("RESET", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 65)
+            pygame.draw.rect(screen, (120, 120, 120), cancel_button, border_radius=15)
+            draw_text(
+                "Cancel", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 145
+            )
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if reset_button.collidepoint(event.pos):
+                        save_accounts({})
+                        try:
+                            with open(UNLOCKED_LEVELS_FILE, "w") as f:
+                                json.dump({}, f)
+                        except Exception:
+                            pass
+                        confirm_reset_accounts = False
+                        return "signout"
+                    elif cancel_button.collidepoint(event.pos):
+                        confirm_reset_accounts = False
+            pygame.display.flip()
+            clock.tick(30)
+            continue
         if accounts_list:
             # Accounts list screen for Admin
             accounts = load_accounts()
@@ -1775,6 +1835,7 @@ def show_settings_screen(player_name):
         draw_text("Settings", font, BLACK, screen, WIDTH // 2, HEIGHT // 2 - 100)
         delete_button = None
         accounts_button = None
+        reset_accounts_button = None
         password_y = HEIGHT // 2 + 50
         accounts = load_accounts()
         admin_mode = is_admin(accounts, player_name)
@@ -1784,7 +1845,19 @@ def show_settings_screen(player_name):
             draw_text(
                 "Accounts", small_font, WHITE, screen, WIDTH // 2, HEIGHT // 2 + 5
             )
-            password_y = HEIGHT // 2 + 80
+            reset_accounts_button = pygame.Rect(
+                WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 50
+            )
+            pygame.draw.rect(screen, RED, reset_accounts_button, border_radius=15)
+            draw_text(
+                "Reset Accounts",
+                small_font,
+                WHITE,
+                screen,
+                WIDTH // 2,
+                HEIGHT // 2 + 65,
+            )
+            password_y = HEIGHT // 2 + 100
         elif player_name not in ["kate", "guest"]:
             delete_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 50)
             pygame.draw.rect(screen, RED, delete_button, border_radius=15)
@@ -1811,6 +1884,11 @@ def show_settings_screen(player_name):
                     return "delete"
                 if accounts_button and accounts_button.collidepoint(event.pos):
                     accounts_list = True
+                if (
+                    reset_accounts_button
+                    and reset_accounts_button.collidepoint(event.pos)
+                ):
+                    confirm_reset_accounts = True
                 if set_password_button.collidepoint(event.pos):
                     if has_password:
                         # Confirm remove password
@@ -1912,6 +1990,8 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
                         )
                         if action == "delete_account":
                             return None, None, "delete_account"
+                        if action == "signout":
+                            return None, None, "signout"
                         return level, False, None
                     if back_button.collidepoint(event.pos):
                         return None, None, "back"
@@ -1919,6 +1999,8 @@ def wait_for_start_and_choose_level(unlocked_levels, player_name):
                         result = show_settings_screen(player_name)
                         if result == "delete":
                             confirm_delete = True
+                        if result == "signout":
+                            return None, None, "signout"
         pygame.display.flip()
         clock.tick(30)
 
@@ -1935,7 +2017,7 @@ def load_highest_unlocked_level(player_name=None, admin_mode=False):
             if admin_mode or player_name == "kate":
                 return data.get(player_name, 1)
         elif isinstance(data, int):
-            # Legacy support: if file is just an int, treat as David's progress
+            # Legacy support: if file is just an int, treat as admin progress
             if admin_mode:
                 return data
     except Exception:
@@ -2114,135 +2196,84 @@ def game_loop():
                 freeze_pos = blue_balls[0]
                 speedup_pos = None
                 slowdown_pos = None
-            speedup_active = False
-            speedup_timer = 0
-            speedup_seconds_left = 0
-            slowdown_active = False
-            slowdown_timer = 0
-            slowdown_seconds_left = 0
-            freeze_active = False
-            freeze_timer = 0
-            freeze_seconds_left = 0
-            player_speed = SPEED
-            current_red_speed = red_speed
+            engine_state = GameState(
+                width=WIDTH,
+                height=HEIGHT,
+                level=level,
+                player_radius=PLAYER_RADIUS,
+                red_radius=RED_RADIUS,
+                blue_radius=BLUE_RADIUS,
+                base_player_speed=SPEED,
+                base_red_speed=red_speed,
+                player_speed=SPEED,
+                current_red_speed=red_speed,
+                num_blue=num_blue,
+                collected=0,
+                player_pos=(player_pos[0], player_pos[1]),
+                red_balls=[(r[0], r[1]) for r in red_balls],
+                blue_balls=[(b[0], b[1]) for b in blue_balls],
+                freeze_pos=(freeze_pos[0], freeze_pos[1]) if freeze_pos else None,
+                speedup_pos=(speedup_pos[0], speedup_pos[1]) if speedup_pos else None,
+                slowdown_pos=(slowdown_pos[0], slowdown_pos[1])
+                if slowdown_pos
+                else None,
+            )
+            touch_target = None
             # --- Main gameplay loop ---
             running = True
             while running:
                 fill_background()
+                direction_x = 0
+                direction_y = 0
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.quit()
                         sys.exit()
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        touch_target = [event.pos[0], event.pos[1]]
+                    if event.type == pygame.MOUSEMOTION and event.buttons[0]:
+                        touch_target = [event.pos[0], event.pos[1]]
+                    if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                        touch_target = None
+                    if event.type == pygame.FINGERDOWN:
+                        touch_target = [
+                            int(event.x * WIDTH),
+                            int(event.y * HEIGHT),
+                        ]
+                    if event.type == pygame.FINGERMOTION:
+                        touch_target = [
+                            int(event.x * WIDTH),
+                            int(event.y * HEIGHT),
+                        ]
+                    if event.type == pygame.FINGERUP:
+                        touch_target = None
                 keys = pygame.key.get_pressed()
-                player_moving = (
-                    keys[pygame.K_LEFT]
-                    or keys[pygame.K_RIGHT]
-                    or keys[pygame.K_UP]
-                    or keys[pygame.K_DOWN]
-                )
                 if keys[pygame.K_LEFT]:
-                    player_pos[0] -= player_speed
+                    direction_x -= 1
                 if keys[pygame.K_RIGHT]:
-                    player_pos[0] += player_speed
+                    direction_x += 1
                 if keys[pygame.K_UP]:
-                    player_pos[1] -= player_speed
+                    direction_y -= 1
                 if keys[pygame.K_DOWN]:
-                    player_pos[1] += player_speed
-                player_pos[0] = max(
-                    PLAYER_RADIUS, min(WIDTH - PLAYER_RADIUS, player_pos[0])
-                )
-                player_pos[1] = max(
-                    PLAYER_RADIUS, min(HEIGHT - PLAYER_RADIUS, player_pos[1])
-                )
-                # Freeze timer logic
-                if freeze_active:
-                    freeze_timer -= clock.get_time()
-                    if freeze_timer <= 0:
-                        freeze_active = False
-                    freeze_seconds_left = max(0, int((freeze_timer + 999) // 1000))
-                else:
-                    freeze_seconds_left = 0
-                # Speed up timer logic
-                if speedup_active:
-                    speedup_timer -= clock.get_time()
-                    if speedup_timer <= 0:
-                        speedup_active = False
-                        player_speed = SPEED
-                    speedup_seconds_left = max(0, int((speedup_timer + 999) // 1000))
-                else:
-                    speedup_seconds_left = 0
-                # Slow down timer logic
-                if slowdown_active:
-                    slowdown_timer -= clock.get_time()
-                    if slowdown_timer <= 0:
-                        slowdown_active = False
-                        current_red_speed = red_speed
-                    slowdown_seconds_left = max(0, int((slowdown_timer + 999) // 1000))
-                else:
-                    slowdown_seconds_left = 0
-                # Move red balls toward player (unless freeze is active)
-                if not freeze_active:
-                    for i, red_pos in enumerate(red_balls):
-                        dx = player_pos[0] - red_pos[0]
-                        dy = player_pos[1] - red_pos[1]
-                        dist = max(1, (dx**2 + dy**2) ** 0.5)
-                        move_x = round(current_red_speed * dx / dist)
-                        move_y = round(current_red_speed * dy / dist)
-                        if move_x == 0 and dx != 0:
-                            move_x = 1 if dx > 0 else -1
-                        if move_y == 0 and dy != 0:
-                            move_y = 1 if dy > 0 else -1
-                        red_pos[0] += move_x
-                        red_pos[1] += move_y
-                # Separate red balls only when the player is moving
-                if player_moving:
-                    for i in range(len(red_balls)):
-                        for j in range(i + 1, len(red_balls)):
-                            r1 = red_balls[i]
-                            r2 = red_balls[j]
-                            dx = r2[0] - r1[0]
-                            dy = r2[1] - r1[1]
-                            dist = (dx**2 + dy**2) ** 0.5
-                            min_dist = 2 * RED_RADIUS
-                            if dist < min_dist:
-                                # Find the opposite side of the yellow ball (player)
-                                def opposite_edge(player_pos):
-                                    px, py = player_pos
-                                    # Find which edge is farthest from player
-                                    dists = [
-                                        (px, "left"),
-                                        (WIDTH - px, "right"),
-                                        (py, "top"),
-                                        (HEIGHT - py, "bottom"),
-                                    ]
-                                    farthest = max(dists, key=lambda x: x[0])[1]
-                                    if farthest == "left":
-                                        x = RED_RADIUS
-                                        y = random.randint(
-                                            RED_RADIUS, HEIGHT - RED_RADIUS
-                                        )
-                                    elif farthest == "right":
-                                        x = WIDTH - RED_RADIUS
-                                        y = random.randint(
-                                            RED_RADIUS, HEIGHT - RED_RADIUS
-                                        )
-                                    elif farthest == "top":
-                                        x = random.randint(
-                                            RED_RADIUS, WIDTH - RED_RADIUS
-                                        )
-                                        y = RED_RADIUS
-                                    else:  # bottom
-                                        x = random.randint(
-                                            RED_RADIUS, WIDTH - RED_RADIUS
-                                        )
-                                        y = HEIGHT - RED_RADIUS
-                                    return [x, y]
+                    direction_y += 1
 
-                                # Respawn both red balls on the opposite side of the player
-                                red_balls[i] = opposite_edge(player_pos)
-                                red_balls[j] = opposite_edge(player_pos)
-                for blue in blue_balls:
-                    if freeze_pos is not None and blue == freeze_pos:
+                tick_result = engine_step(
+                    engine_state,
+                    InputFrame(
+                        direction_x=direction_x,
+                        direction_y=direction_y,
+                        touch_target=tuple(touch_target) if touch_target else None,
+                        timestamp_ms=pygame.time.get_ticks(),
+                    ),
+                    clock.get_time(),
+                )
+                engine_state = tick_result.state
+                collected = engine_state.collected
+                win = engine_state.win
+                lose = engine_state.lose
+
+                for blue in engine_state.blue_balls:
+                    if engine_state.freeze_pos is not None and blue == engine_state.freeze_pos:
                         pygame.draw.circle(screen, (180, 240, 255), blue, BLUE_RADIUS)
                         pygame.draw.circle(screen, WHITE, blue, BLUE_RADIUS, 2)
                         for angle in range(0, 360, 60):
@@ -2254,7 +2285,10 @@ def game_loop():
                             pygame.draw.line(
                                 screen, (0, 180, 255), (x1, y1), (x2, y2), 2
                             )
-                    elif speedup_pos is not None and blue == speedup_pos:
+                    elif (
+                        engine_state.speedup_pos is not None
+                        and blue == engine_state.speedup_pos
+                    ):
                         pygame.draw.circle(screen, (0, 200, 0), blue, BLUE_RADIUS)
                         pygame.draw.circle(screen, WHITE, blue, BLUE_RADIUS, 3)
                         bolt = [
@@ -2267,7 +2301,10 @@ def game_loop():
                         ]
                         pygame.draw.polygon(screen, YELLOW, bolt)
                         pygame.draw.polygon(screen, BLACK, bolt, 1)
-                    elif slowdown_pos is not None and blue == slowdown_pos:
+                    elif (
+                        engine_state.slowdown_pos is not None
+                        and blue == engine_state.slowdown_pos
+                    ):
                         pygame.draw.circle(screen, (255, 140, 0), blue, BLUE_RADIUS)
                         pygame.draw.circle(screen, WHITE, blue, BLUE_RADIUS, 3)
                         pygame.draw.arc(
@@ -2282,54 +2319,9 @@ def game_loop():
                         )
                     else:
                         pygame.draw.circle(screen, BLUE, blue, BLUE_RADIUS)
-                for red in red_balls:
+                for red in engine_state.red_balls:
                     pygame.draw.circle(screen, RED, red, RED_RADIUS)
-                pygame.draw.circle(screen, YELLOW, player_pos, PLAYER_RADIUS)
-                for blue in blue_balls[:]:
-                    if (player_pos[0] - blue[0]) ** 2 + (
-                        player_pos[1] - blue[1]
-                    ) ** 2 < (PLAYER_RADIUS + BLUE_RADIUS) ** 2:
-                        is_freeze = freeze_pos is not None and blue == freeze_pos
-                        is_speedup = speedup_pos is not None and blue == speedup_pos
-                        is_slowdown = slowdown_pos is not None and blue == slowdown_pos
-                        if is_freeze:
-                            freeze_active = True
-                            freeze_timer = 5000
-                            freeze_seconds_left = max(
-                                0, int((freeze_timer + 999) // 1000)
-                            )
-                        if is_speedup:
-                            speedup_active = True
-                            speedup_timer = 5000
-                            player_speed = SPEED * 2
-                            speedup_seconds_left = max(
-                                0, int((speedup_timer + 999) // 1000)
-                            )
-                        if is_slowdown:
-                            slowdown_active = True
-                            slowdown_timer = 5000
-                            current_red_speed = max(1, red_speed // 2)
-                            slowdown_seconds_left = max(
-                                0, int((slowdown_timer + 999) // 1000)
-                            )
-                        blue_balls.remove(blue)
-                        collected += 1
-                        if is_freeze:
-                            freeze_pos = None
-                        if is_speedup:
-                            speedup_pos = None
-                        if is_slowdown:
-                            slowdown_pos = None
-                if not freeze_active:
-                    for red in red_balls:
-                        if (player_pos[0] - red[0]) ** 2 + (
-                            player_pos[1] - red[1]
-                        ) ** 2 < (PLAYER_RADIUS + RED_RADIUS) ** 2:
-                            lose = True
-                            running = False
-                if collected == num_blue:
-                    win = True
-                    running = False
+                pygame.draw.circle(screen, YELLOW, engine_state.player_pos, PLAYER_RADIUS)
                 draw_text(
                     f"Collected: {collected}/{num_blue}",
                     small_font,
@@ -2338,27 +2330,27 @@ def game_loop():
                     100,
                     30,
                 )
-                if freeze_active:
+                if engine_state.freeze_active:
                     draw_text(
-                        f"Freeze: {freeze_seconds_left}",
+                        f"Freeze: {tick_result.ui_hints.freeze_seconds_left}",
                         small_font,
                         (0, 180, 255),
                         screen,
                         WIDTH - 120,
                         30,
                     )
-                if speedup_active:
+                if engine_state.speedup_active:
                     draw_text(
-                        f"Speed Up: {speedup_seconds_left}",
+                        f"Speed Up: {tick_result.ui_hints.speedup_seconds_left}",
                         small_font,
                         (0, 200, 0),
                         screen,
                         WIDTH - 120,
                         60,
                     )
-                if slowdown_active:
+                if engine_state.slowdown_active:
                     draw_text(
-                        f"Slow Down: {slowdown_seconds_left}",
+                        f"Slow Down: {tick_result.ui_hints.slowdown_seconds_left}",
                         small_font,
                         YELLOW,
                         screen,
@@ -2367,6 +2359,8 @@ def game_loop():
                     )
                 pygame.display.flip()
                 clock.tick(60)
+                if win or lose:
+                    running = False
             restart_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 60)
             save_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 120, 200, 50)
             show_save = (
@@ -2588,7 +2582,7 @@ def game_loop():
                             save_message = ""
                         if settings_button.collidepoint(event.pos):
                             result = show_settings_screen(player_name)
-                            if result == "delete":
+                            if result in {"delete", "signout"}:
                                 authenticated_user = None
                                 break
                 else:

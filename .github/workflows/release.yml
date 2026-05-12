@@ -46,10 +46,23 @@ jobs:
           }
           & $iscc installer.iss
 
+      - name: Create versioned artifact + checksum (Windows)
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $src = "dist/installer/KittyChase-Setup.exe"
+          $dst = "dist/installer/kittychase-windows-x86_64-$version.exe"
+          Copy-Item -Path $src -Destination $dst -Force
+          $hash = (Get-FileHash -Path $dst -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $dst -Leaf)" | Set-Content "$dst.sha256"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/installer/KittyChase-Setup.exe
+          files: |
+            dist/installer/KittyChase-Setup.exe
+            dist/installer/kittychase-windows-x86_64-*.exe
+            dist/installer/kittychase-windows-x86_64-*.exe.sha256
 
   build-release-macos:
     runs-on: macos-latest
@@ -68,14 +81,27 @@ jobs:
         run: |
           bash tools/build_macos.sh
 
+      - name: Create versioned artifact + checksum (macOS arm64)
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          src="dist/installer/KittyChase-macOS.dmg"
+          dst="dist/installer/kittychase-macos-arm64-${version}.dmg"
+          cp -f "$src" "$dst"
+          cd dist/installer
+          sha256sum "$(basename "$dst")" > "$(basename "$dst").sha256"
+
       - name: Publish GitHub Release (macOS)
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/installer/KittyChase-macOS.dmg
+          files: |
+            dist/installer/KittyChase-macOS.dmg
+            dist/installer/kittychase-macos-arm64-*.dmg
+            dist/installer/kittychase-macos-arm64-*.dmg.sha256
 
-  build-release-linux:
-    runs-on: ubuntu-latest
-    needs: build-release-macos
+  build-release-macos-intel:
+    runs-on: macos-15-intel
+    needs: build-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -85,12 +111,95 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build app + tarball
+      - name: Build app + DMG (Intel)
+        shell: bash
+        env:
+          MAC_DMG_NAME: KittyChase-macOS-intel.dmg
+        run: |
+          bash tools/build_macos.sh
+
+      - name: Create versioned artifact + checksum (macOS Intel)
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          src="dist/installer/KittyChase-macOS-intel.dmg"
+          dst="dist/installer/kittychase-macos-x86_64-${version}.dmg"
+          cp -f "$src" "$dst"
+          cd dist/installer
+          sha256sum "$(basename "$dst")" > "$(basename "$dst").sha256"
+
+      - name: Publish GitHub Release (macOS Intel)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/installer/KittyChase-macOS-intel.dmg
+            dist/installer/kittychase-macos-x86_64-*.dmg
+            dist/installer/kittychase-macos-x86_64-*.dmg.sha256
+
+  build-release-linux:
+    runs-on: ubuntu-latest
+    needs:
+      - build-release-macos
+      - build-release-macos-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build app + AppImage
         shell: bash
         run: |
           bash tools/build_linux.sh
 
+      - name: Create versioned artifact + checksum (Linux)
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          src="dist/installer/KittyChase-linux.AppImage"
+          dst="dist/installer/kittychase-linux-x86_64-${version}.AppImage"
+          cp -f "$src" "$dst"
+          cd dist/installer
+          sha256sum "$(basename "$dst")" > "$(basename "$dst").sha256"
+
       - name: Publish GitHub Release (Linux)
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/installer/KittyChase-linux.tar.gz
+          files: |
+            dist/installer/KittyChase-linux.AppImage
+            dist/installer/kittychase-linux-x86_64-*.AppImage
+            dist/installer/kittychase-linux-x86_64-*.AppImage.sha256
+
+  build-release-universal-porting-kit:
+    runs-on: ubuntu-latest
+    needs: build-release-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create universal support bundle
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist/installer
+          zip -r "dist/installer/kittychase-universal-porting-kits-${version}.zip" \
+            README.md \
+            platform_capabilities.json \
+            engine \
+            clients \
+            platform_builds \
+            porting_kits \
+            tests \
+            tools/legacy_smoke.py
+          cd dist/installer
+          sha256sum "kittychase-universal-porting-kits-${version}.zip" > "kittychase-universal-porting-kits-${version}.zip.sha256"
+
+      - name: Publish GitHub Release (Universal Porting Kits)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/installer/kittychase-universal-porting-kits-*.zip
+            dist/installer/kittychase-universal-porting-kits-*.zip.sha256

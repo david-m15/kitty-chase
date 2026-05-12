@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "description": "Golden vectors consumed by tvOS-native rules conformance tests.",
+  "vectors": [
+    {
+      "name": "basic-movement",
+      "input_frames": [
+        {"direction_x": 1, "direction_y": 0, "timestamp_ms": 100},
+        {"direction_x": 1, "direction_y": 0, "timestamp_ms": 200},
+        {"direction_x": 0, "direction_y": 1, "timestamp_ms": 300}
+      ]
+    }
+  ]
+}
+

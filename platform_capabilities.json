@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "platforms": {
+    "Windows": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-windows-x86_64-{version}.exe"
+    },
+    "Ubuntu": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-linux-x86_64-{version}.AppImage"
+    },
+    "Fedora": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-linux-x86_64-{version}.AppImage"
+    },
+    "Debian": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-linux-x86_64-{version}.AppImage"
+    },
+    "CentOS": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-linux-x86_64-{version}.AppImage"
+    },
+    "BOSS Linux": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-linux-x86_64-{version}.AppImage"
+    },
+    "macOS": {
+      "wave": 1,
+      "status": "production",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": true,
+      "artifact_pattern": "kittychase-macos-{arch}-{version}.dmg"
+    },
+    "Android": {
+      "wave": 1,
+      "status": "production_target",
+      "renderer": "kivy_mobile",
+      "input": ["touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "kittychase-android-{arch}-{version}.apk"
+    },
+    "iOS": {
+      "wave": 1,
+      "status": "production_target",
+      "renderer": "kivy_mobile",
+      "input": ["touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "kittychase-ios-{arch}-{version}.ipa"
+    },
+    "iPadOS": {
+      "wave": 1,
+      "status": "production_target",
+      "renderer": "kivy_mobile",
+      "input": ["touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "kittychase-ipados-{arch}-{version}.ipa"
+    },
+    "tvOS": {
+      "wave": 1,
+      "status": "production_target",
+      "renderer": "tvos_native",
+      "input": ["controller", "remote"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "kittychase-tvos-{arch}-{version}.ipa"
+    },
+    "watchOS": {
+      "wave": 2,
+      "status": "companion_target",
+      "renderer": "watchos_companion",
+      "input": ["touch", "crown"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "kittychase-watchos-{arch}-{version}.ipa"
+    },
+    "FreeBSD": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse", "touch"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "Solaris": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "HarmonyOS": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "Fuchsia": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "QNX": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["keyboard", "touch", "controller"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "AIX (IBM)": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "HP-UX (Hewlett Packard)": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "ReactOS": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "pygame_desktop",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "OpenVMS": {
+      "wave": 3,
+      "status": "source_porting_kit",
+      "renderer": "platform_port",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    },
+    "IRIX (SGI)": {
+      "wave": 4,
+      "status": "archival_feasibility",
+      "renderer": "legacy_port",
+      "input": ["keyboard", "mouse"],
+      "storage": true,
+      "updater": false,
+      "artifact_pattern": "source-only"
+    }
+  }
+}
+

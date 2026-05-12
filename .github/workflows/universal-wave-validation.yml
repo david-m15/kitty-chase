@@ -1,0 +1,81 @@
+name: Universal Wave Validation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  wave1-core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          python -m unittest discover -s tests -p "test_*.py"
+
+  wave3-porting-kit-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run legacy smoke
+        shell: bash
+        run: |
+          python tools/legacy_smoke.py
+
+  manifest-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate platform manifest coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("platform_capabilities.json").read_text("utf-8"))
+          required = {
+            "Windows","Ubuntu","Fedora","Debian","CentOS","Android","iOS","iPadOS",
+            "watchOS","tvOS","FreeBSD","Solaris","BOSS Linux","HarmonyOS","Fuchsia",
+            "QNX","AIX (IBM)","HP-UX (Hewlett Packard)","IRIX (SGI)","ReactOS","OpenVMS","macOS"
+          }
+          actual = set(manifest.get("platforms", {}).keys())
+          missing = sorted(required - actual)
+          if missing:
+            raise SystemExit(f"Missing platform entries: {missing}")
+          print("platform manifest coverage ok")
+          PY
+

@@ -71,7 +71,7 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build app + tarball
+      - name: Build app + AppImage
         shell: bash
         run: |
           bash tools/build_linux.sh
