@@ -311,7 +311,7 @@ def run_admin_setup():
 
 # Game settings
 APP_NAME = "Kitty Chase"
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.2.4"
 GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
 WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Windows-Installer.exe"
