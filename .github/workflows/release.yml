@@ -96,9 +96,9 @@ jobs:
           versioned="dist/installer/KittyChase-macOS-Apple-Silicon-arm64-v${version}.dmg"
           if [ ! -f "$src" ]; then
             echo "Expected macOS Apple Silicon DMG missing: $src"
-            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.dmg' -print -quit || true)"
+            fallback="$(find dist/installer -type f -name '*.dmg' -print 2>/dev/null | head -n 1 || true)"
             if [ -z "$fallback" ]; then
-              find dist/installer -maxdepth 1 -type f -print || true
+              find dist/installer -type f -print || true
               exit 1
             fi
             echo "Using detected DMG: $fallback"
@@ -148,9 +148,9 @@ jobs:
           versioned="dist/installer/KittyChase-macOS-Intel-x86_64-v${version}.dmg"
           if [ ! -f "$src" ]; then
             echo "Expected macOS Intel DMG missing: $src"
-            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.dmg' -print -quit || true)"
+            fallback="$(find dist/installer -type f -name '*.dmg' -print 2>/dev/null | head -n 1 || true)"
             if [ -z "$fallback" ]; then
-              find dist/installer -maxdepth 1 -type f -print || true
+              find dist/installer -type f -print || true
               exit 1
             fi
             echo "Using detected DMG: $fallback"
@@ -200,9 +200,9 @@ jobs:
           versioned="dist/installer/KittyChase-Linux-x86_64-v${version}.AppImage"
           if [ ! -f "$src" ]; then
             echo "Expected Linux AppImage missing: $src"
-            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.AppImage' -print -quit || true)"
+            fallback="$(find dist/installer -type f -name '*.AppImage' -print 2>/dev/null | head -n 1 || true)"
             if [ -z "$fallback" ]; then
-              find dist/installer -maxdepth 1 -type f -print || true
+              find dist/installer -type f -print || true
               exit 1
             fi
             echo "Using detected AppImage: $fallback"
