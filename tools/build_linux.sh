@@ -12,7 +12,7 @@ ICON_SRC="tiger.png"
 pyinstaller --windowed --name "KittyChase" --icon "$ICON_SRC" --add-data "tiger.png:." chase_game.py
 
 mkdir -p dist/installer
-APPIMAGE_NAME="${LINUX_APPIMAGE_NAME:-KittyChase-linux.AppImage}"
+APPIMAGE_NAME="${LINUX_APPIMAGE_NAME:-KittyChase-Linux-AppImage.AppImage}"
 APPIMAGE_PATH="dist/installer/$APPIMAGE_NAME"
 
 PYI_DIR="dist/KittyChase"

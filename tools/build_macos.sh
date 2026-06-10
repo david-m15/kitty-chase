@@ -35,7 +35,7 @@ fi
 pyinstaller --windowed --name "KittyChase" "${ICON_ARGS[@]}" --add-data "tiger.png:." chase_game.py
 
 mkdir -p dist/installer
-DMG_NAME="${MAC_DMG_NAME:-KittyChase-macOS.dmg}"
+DMG_NAME="${MAC_DMG_NAME:-KittyChase-macOS-Apple-Silicon.dmg}"
 DMG_PATH="dist/installer/$DMG_NAME"
 APP_PATH="dist/KittyChase.app"
 if [ ! -d "$APP_PATH" ]; then

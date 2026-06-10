@@ -85,7 +85,7 @@ pyinstaller chase_game.spec
 iscc installer.iss
 ```
 
-The installer will be created at `dist\\installer\\KittyChase-Setup.exe`.
+The installer will be created at `dist\\installer\\KittyChase-Windows-Installer.exe`.
 
 ## Build macOS App + DMG (macOS)
 
@@ -100,7 +100,9 @@ pip install -r requirements.txt
 bash tools/build_macos.sh
 ```
 
-The app will be created at `dist/KittyChase.app` and the installer at `dist/installer/KittyChase-macOS.dmg`.
+The app will be created at `dist/KittyChase.app` and the installer at `dist/installer/KittyChase-macOS-Apple-Silicon.dmg`.
+
+For Intel builds, GitHub Actions sets `MAC_DMG_NAME=KittyChase-macOS-Intel.dmg`.
 
 ## Build Linux App + AppImage (Linux)
 
@@ -115,7 +117,7 @@ pip install -r requirements.txt
 bash tools/build_linux.sh
 ```
 
-The app will be created at `dist/KittyChase` and the installer at `dist/installer/KittyChase-linux.AppImage`.
+The app will be created at `dist/KittyChase` and the installer at `dist/installer/KittyChase-Linux-AppImage.AppImage`.
 
 ## Auto-Update (GitHub Releases)
 
@@ -126,10 +128,10 @@ The app checks GitHub Releases and can download/run the latest installer.
 APP_VERSION = "1.0.0"
 GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
 GITHUB_REPO = "YOUR_REPO_NAME"
-WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
-MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
-MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-intel.dmg"
-LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.AppImage"
+WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Windows-Installer.exe"
+MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS-Apple-Silicon.dmg"
+MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-Intel.dmg"
+LINUX_INSTALLER_ASSET_NAME = "KittyChase-Linux-AppImage.AppImage"
 ```
 1. Keep `AppVersion` in `installer.iss` in sync with `APP_VERSION`.
 1. Build the installers (run on the matching OS):
@@ -147,10 +149,10 @@ bash tools/build_linux.sh
 1. Create a GitHub Release with tag `v1.0.0` (matching `APP_VERSION`).
 1. Upload the installers to that release:
 ```
-dist\\installer\\KittyChase-Setup.exe
-dist/installer/KittyChase-macOS.dmg
-dist/installer/KittyChase-macOS-intel.dmg
-dist/installer/KittyChase-linux.AppImage
+dist\\installer\\KittyChase-Windows-Installer.exe
+dist/installer/KittyChase-macOS-Apple-Silicon.dmg
+dist/installer/KittyChase-macOS-Intel.dmg
+dist/installer/KittyChase-Linux-AppImage.AppImage
 ```
 
 On next launch, the packaged app will prompt to update. On Linux, the update downloads and launches the AppImage.
@@ -168,7 +170,26 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-The workflow will create the release and upload `KittyChase-Setup.exe`, `KittyChase-macOS.dmg`, `KittyChase-macOS-intel.dmg`, and `KittyChase-linux.AppImage`.
+The workflow will create the release and upload clearly named installers:
+- `KittyChase-Windows-Installer.exe`
+- `KittyChase-macOS-Apple-Silicon.dmg`
+- `KittyChase-macOS-Intel.dmg`
+- `KittyChase-Linux-AppImage.AppImage`
+- `KittyChase-Universal-Porting-Kits-vX.Y.Z.zip`
+
+It also uploads older compatibility aliases (`KittyChase-Setup.exe`, `KittyChase-macOS.dmg`, `KittyChase-macOS-intel.dmg`, and `KittyChase-linux.AppImage`) so already-installed apps can still find updates.
+
+## Release Asset Guide
+
+Use the operating system in the asset name:
+
+| Asset name | Operating system |
+|---|---|
+| `KittyChase-Windows-Installer.exe` | Windows |
+| `KittyChase-macOS-Apple-Silicon.dmg` | macOS on Apple Silicon |
+| `KittyChase-macOS-Intel.dmg` | macOS on Intel |
+| `KittyChase-Linux-AppImage.AppImage` | Linux x86_64 distros |
+| `KittyChase-Universal-Porting-Kits-vX.Y.Z.zip` | Source/porting kits for non-desktop targets |
 
 ## GitHub Actions CI Build
 

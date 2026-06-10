@@ -314,10 +314,10 @@ APP_NAME = "Kitty Chase"
 APP_VERSION = "1.2.2"
 GITHUB_OWNER = "david-m15"
 GITHUB_REPO = "kitty-chase"
-WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Setup.exe"
-MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS.dmg"
-MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-intel.dmg"
-LINUX_INSTALLER_ASSET_NAME = "KittyChase-linux.AppImage"
+WINDOWS_INSTALLER_ASSET_NAME = "KittyChase-Windows-Installer.exe"
+MAC_APPLE_SILICON_INSTALLER_ASSET_NAME = "KittyChase-macOS-Apple-Silicon.dmg"
+MAC_INTEL_INSTALLER_ASSET_NAME = "KittyChase-macOS-Intel.dmg"
+LINUX_INSTALLER_ASSET_NAME = "KittyChase-Linux-AppImage.AppImage"
 
 
 def _installer_asset_name():
