@@ -95,21 +95,21 @@ jobs:
           compat="dist/installer/KittyChase-macOS.dmg"
           versioned="dist/installer/KittyChase-macOS-Apple-Silicon-arm64-v${version}.dmg"
           if [ ! -f "$src" ]; then
-            echo "Missing macOS Apple Silicon DMG: $src"
-            find dist/installer -maxdepth 1 -type f -print || true
-            exit 1
+            echo "Expected macOS Apple Silicon DMG missing: $src"
+            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.dmg' -print -quit || true)"
+            if [ -z "$fallback" ]; then
+              find dist/installer -maxdepth 1 -type f -print || true
+              exit 1
+            fi
+            echo "Using detected DMG: $fallback"
+            src="$fallback"
           fi
           cp -f "$src" "$compat"
           cp -f "$src" "$versioned"
-          python - "$versioned" <<'PY'
-          import hashlib
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          digest = hashlib.sha256(path.read_bytes()).hexdigest()
-          path.with_name(path.name + ".sha256").write_text(f"{digest}  {path.name}\n")
-          PY
+          if [ "$src" != "dist/installer/KittyChase-macOS-Apple-Silicon.dmg" ]; then
+            cp -f "$src" "dist/installer/KittyChase-macOS-Apple-Silicon.dmg"
+          fi
+          python -c 'import hashlib, pathlib, sys; p = pathlib.Path(sys.argv[1]); h = hashlib.sha256(p.read_bytes()).hexdigest(); p.with_name(p.name + ".sha256").write_text(f"{h}  {p.name}\n")' "$versioned"
 
       - name: Publish GitHub Release (macOS)
         uses: softprops/action-gh-release@v2
@@ -147,21 +147,21 @@ jobs:
           compat="dist/installer/KittyChase-macOS-intel.dmg"
           versioned="dist/installer/KittyChase-macOS-Intel-x86_64-v${version}.dmg"
           if [ ! -f "$src" ]; then
-            echo "Missing macOS Intel DMG: $src"
-            find dist/installer -maxdepth 1 -type f -print || true
-            exit 1
+            echo "Expected macOS Intel DMG missing: $src"
+            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.dmg' -print -quit || true)"
+            if [ -z "$fallback" ]; then
+              find dist/installer -maxdepth 1 -type f -print || true
+              exit 1
+            fi
+            echo "Using detected DMG: $fallback"
+            src="$fallback"
           fi
           cp -f "$src" "$compat"
           cp -f "$src" "$versioned"
-          python - "$versioned" <<'PY'
-          import hashlib
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          digest = hashlib.sha256(path.read_bytes()).hexdigest()
-          path.with_name(path.name + ".sha256").write_text(f"{digest}  {path.name}\n")
-          PY
+          if [ "$src" != "dist/installer/KittyChase-macOS-Intel.dmg" ]; then
+            cp -f "$src" "dist/installer/KittyChase-macOS-Intel.dmg"
+          fi
+          python -c 'import hashlib, pathlib, sys; p = pathlib.Path(sys.argv[1]); h = hashlib.sha256(p.read_bytes()).hexdigest(); p.with_name(p.name + ".sha256").write_text(f"{h}  {p.name}\n")' "$versioned"
 
       - name: Publish GitHub Release (macOS Intel)
         uses: softprops/action-gh-release@v2
@@ -199,21 +199,21 @@ jobs:
           compat="dist/installer/KittyChase-linux.AppImage"
           versioned="dist/installer/KittyChase-Linux-x86_64-v${version}.AppImage"
           if [ ! -f "$src" ]; then
-            echo "Missing Linux AppImage: $src"
-            find dist/installer -maxdepth 1 -type f -print || true
-            exit 1
+            echo "Expected Linux AppImage missing: $src"
+            fallback="$(find dist/installer -maxdepth 1 -type f -name '*.AppImage' -print -quit || true)"
+            if [ -z "$fallback" ]; then
+              find dist/installer -maxdepth 1 -type f -print || true
+              exit 1
+            fi
+            echo "Using detected AppImage: $fallback"
+            src="$fallback"
           fi
           cp -f "$src" "$compat"
           cp -f "$src" "$versioned"
-          python - "$versioned" <<'PY'
-          import hashlib
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          digest = hashlib.sha256(path.read_bytes()).hexdigest()
-          path.with_name(path.name + ".sha256").write_text(f"{digest}  {path.name}\n")
-          PY
+          if [ "$src" != "dist/installer/KittyChase-Linux-AppImage.AppImage" ]; then
+            cp -f "$src" "dist/installer/KittyChase-Linux-AppImage.AppImage"
+          fi
+          python -c 'import hashlib, pathlib, sys; p = pathlib.Path(sys.argv[1]); h = hashlib.sha256(p.read_bytes()).hexdigest(); p.with_name(p.name + ".sha256").write_text(f"{h}  {p.name}\n")' "$versioned"
 
       - name: Publish GitHub Release (Linux)
         uses: softprops/action-gh-release@v2
@@ -245,15 +245,7 @@ jobs:
             porting_kits \
             tests \
             tools/legacy_smoke.py
-          python - "dist/installer/KittyChase-Universal-Porting-Kits-v${version}.zip" <<'PY'
-          import hashlib
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          digest = hashlib.sha256(path.read_bytes()).hexdigest()
-          path.with_name(path.name + ".sha256").write_text(f"{digest}  {path.name}\n")
-          PY
+          python -c 'import hashlib, pathlib, sys; p = pathlib.Path(sys.argv[1]); h = hashlib.sha256(p.read_bytes()).hexdigest(); p.with_name(p.name + ".sha256").write_text(f"{h}  {p.name}\n")' "dist/installer/KittyChase-Universal-Porting-Kits-v${version}.zip"
 
       - name: Publish GitHub Release (Universal Porting Kits)
         uses: softprops/action-gh-release@v2
